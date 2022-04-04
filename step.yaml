@@ -1,0 +1,345 @@
+version: '1.0'
+kind: step-type
+metadata:
+  name: checkmarx/kics
+  latest: true
+  version: 1.0.0
+  isPublic: true
+  description: Find security vulnerabilities, compliance issues, and infrastructure misconfigurations early in the development cycle of your infrastructure-as-code with KICS by Checkmarx
+  sources:
+    - 'https://github.com/Checkmarx/kics-codefresh-step'
+  stage: incubating
+  maintainers:
+    - name: Checkmarx
+      email: kics@checkmarx.com
+  categories:
+    - security
+  official: false
+  tags: []
+  icon:
+    type: svg
+    url: https://user-images.githubusercontent.com/74001161/160897079-7d8ac970-8843-49ac-b1f2-082c2bb40ceb.svg
+    background: "#f4f4f4"
+  examples:
+    - description: KICS scan
+      workflow:
+        steps:
+          clone:
+            title: Clone a project
+            type: git-clone
+            repo: rafaela-soares/query
+            git: github
+          run_kics:
+            title: Scanning IaC files
+            type: checkmarx/kics
+            arguments:
+              PROJECT_PATH: ./query
+              QUERIES_PATH: ./query/alb_listening_on_http
+              EXCLUDE_PATHS: ./query/alb_listening_on_http/test/negative.yaml
+              TYPES: Ansible
+    - description: KICS scan
+      workflow:
+        steps:
+          run_kics:
+            title: Scanning IaC files
+            type: checkmarx/kics
+            arguments:
+              PROJECT_PATH: 'git::https://github.com/rafaela-soares/query'
+              EXCLUDE_RESULTS: ad70b3786c9bc9cc17d9b413772c0930c22f7b7cc749bc9a7c27533a29de5287,2669fd966f36e8bac8901297b895cc894791f2ef9a036e3beab357fb20e95cff
+              TYPES: Ansible
+              VERBOSE: true
+    - description: KICS scan
+      workflow:
+        steps:
+          run_kics:
+            title: Scanning IaC files
+            type: checkmarx/kics
+            arguments:
+              PROJECT_PATH: 'git::https://github.com/rafaela-soares/query'
+              TYPES: Ansible
+              EXCLUDE_CATEGORIES: Networking and Firewall
+    - description: KICS scan
+      workflow:
+        steps:
+          clone:
+            title: Clone a project
+            type: git-clone
+            repo: 'rafaela-soares/secrets'
+            git: github
+          run_kics:
+                title: Scanning IaC files
+                type: checkmarx/kics
+                arguments:
+                    PROJECT_PATH: ./secrets/passwords_and_secrets/test/positive1.yaml
+                    SECRETS_REGEXES_PATH: ./secrets/passwords_and_secrets/regex_rules.json
+    - description: KICS scan
+      workflow:
+        steps:
+          clone:
+            title: Clone a project
+            type: git-clone
+            repo: 'rafaela-soares/query'
+            git: github
+          run_kics:
+                title: Scanning IaC files With KICS
+                type: checkmarx/kics
+                arguments:
+                    PROJECT_PATH: ./query
+                    QUERIES_PATH: ./query/alb_listening_on_http
+                    OUTPUT_PATH: /codefresh/volume/query/reports
+                    OUTPUT_FORMATS: all
+                    VERBOSE: true
+                    EXCLUDE_PATHS: ./query/alb_listening_on_http/test/negative.yaml
+                    TYPES: Ansible
+                    LOG_LEVEL: DEBUG
+                    PAYLOAD_PATH: /codefresh/volume/query/payload.json
+                    IGNORE_ON_EXIT: results
+          save_reports_and_payload:
+                  title: Saving KICS payload and KICS reports
+                  type: git-commit
+                  arguments:
+                    repo: 'rafaela-soares/query'
+                    git: github
+                    working_directory: '/codefresh/volume/query'
+                    commit_message: saved payload and reports
+                    git_user_name: git-user-name
+                    git_user_email: git-user@email.com
+                    allow_empty: false
+                    add:
+                      - payload.json
+                      - ./reports
+          save_reports_in_s3_bucket:
+             title: Saving KICS reports
+             image: 'amazon/aws-cli'
+             working_directory: '/codefresh/volume/query'
+             commands:
+              - mkdir ~/.aws
+              - touch ~/.aws/config
+              - chmod 600 ~/.aws/config
+              - echo "[default]" > ~/.aws/config
+              - echo "aws_access_key_id=${AWS_ACCESS_KEY_ID}" >> ~/.aws/config
+              - echo "aws_secret_access_key=${AWS_SECRET_ACCESS_KEY}" >> ~/.aws/config
+              - echo "aws_session_token=${AWS_SESSION_TOKEN}" >> ~/.aws/config
+              - echo "region=${AWS_REGION}" >> ~/.aws/config
+              - aws s3 cp ./reports s3://${{BUCKET_NAME}}/ --recursive
+          
+
+spec:
+  arguments: |-
+    {
+        "definitions": {},
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "additionalProperties": false,
+        "patterns": [],
+        "required": [
+          "PROJECT_PATH"
+        ],        
+        "properties": {
+            "PROJECT_PATH": {
+                "type": "string",
+                "description": "paths or directories to scan",
+                "example": "'./somepath,somefile.txt'"
+            },
+            "IGNORE_ON_EXIT": {
+                "type": "string",
+                "description": "defines which kind of non-zero exits code should be ignored (all, results, errors, none)",
+                "example": "results"
+            },
+            "FAIL_ON": {
+                "type": "string",
+                "description": "which kind of results should return an exit code different from 0",
+                "example": "high,medium"
+            },
+            "TIME_OUT": {
+                "type": "integer",
+                "description": "number of seconds the query has to execute before being canceled",
+                "example": "75"
+            },
+            "PROFILING": {
+                "type": "string",
+                "description": "enables performance profiler that prints resource consumption metrics in the logs during the execution (CPU, MEM)",
+                "example": "CPU"
+            },
+            "TYPES": {
+                "type": "string",
+                "description": "case insensitive list of platform types to scan (Ansible, AzureResourceManager, CloudFormation, Dockerfile, DockerCompose, GRPC, GoogleDeploymentManager, Kubernetes, OpenAPI, Terraform)",
+                "example": "Ansible,Terraform"
+            },
+            "EXCLUDE_PATHS": {
+                "type": "string",
+                "description": "exclude paths from scan",
+                "example": "./shouldNotScan/*,somefile.txt"
+            },
+            "EXCLUDE_QUERIES": {
+                "type": "string",
+                "description": "exclude queries by providing the query ID; cannot be provided with query inclusion flags",
+                "example": "e69890e6-fce5-461d-98ad-cb98318dfc96,4728cd65-a20c-49da-8b31-9c08b423e4db"
+            },
+            "EXCLUDE_CATEGORIES": {
+                "type": "string",
+                "description": "exclude categories by providing its name; cannot be provided with query inclusion flags",
+                "example": "Access control,Best practices"
+            },
+            "EXCLUDE_SEVERITIES": {
+                "type": "string",
+                "description": "exclude results by providing the severity of a result",
+                "example": "info,low"
+            },
+            "EXCLUDE_RESULTS": {
+                "type": "string",
+                "description": "exclude results by providing the similarity ID of a result",
+                "example": "d4a1fa80-d9d8-450f-87c2-e1f6669c41f8"
+            },
+            "INCLUDE_QUERIES": {
+                "type": "string",
+                "description": "include queries by providing the query ID; cannot be provided with query exclusion flags",
+                "example": "a227ec01-f97a-4084-91a4-47b350c1db54"
+            },
+            "OUTPUT_FORMATS": {
+                "type": "string",
+                "description": "formats in which the results will be exported (all, asff, csv, cyclonedx, glsast, html, json, junit, pdf, sarif, sonarqube)",
+                "default": "json",
+                "example": "json,sarif"
+            },
+            "OUTPUT_PATH": {
+                "type": "string",
+                "description": "directory path to store reports",
+                "example": "myResults/"
+            },
+            "PAYLOAD_PATH": {
+                "type": "string",
+                "description": "path to store internal representation JSON file",
+                "example": "/tmp/mypayload.json"
+            },
+            "QUERIES_PATH": {
+                "type": "string",
+                "description": "paths to directory with queries",
+                "example": "/query"
+            },
+            "VERBOSE": {
+                "type": "boolean",
+                "description": "write logs to stdout too (mutually exclusive with silent)",
+                "example": "true",
+                "default": false
+            },
+            "LOG_LEVEL": {
+                "type": "string",
+                "description": "determines log level (TRACE,DEBUG,INFO,WARN,ERROR,FATAL)",
+                "example": "DEBUG",
+                "default": "INFO"
+            },
+            "BOM": {
+                "type": "boolean",
+                "description": "include bill of materials (BoM) in results output",
+                "example": true,
+                "default": false
+            },
+            "DISABLE_FULL_DESCRIPTIONS": {
+                "type": "boolean",
+                "description": "disable request for full descriptions and use default vulnerability descriptions",
+                "example": true,
+                "default": false
+            },
+            "DISABLE_SECRETS": {
+                "type": "boolean",
+                "description": "disable secrets scanning",
+                "example": true,
+                "default": false
+            },
+            "SECRETS_REGEXES_PATH": {
+                "type": "string",
+                "description": "path to secrets regex rules configuration file",
+                "example": "./mydir/secrets-config.json"
+            },
+            "LIBRARIES_PATH": {
+                "type": "string",
+                "description": "path to directory with libraries",
+                "example": "./myLibsDir"
+            }
+        }
+    }
+  
+  stepsTemplate: |-
+      main:
+        name: checkmarx/kics
+        image: checkmarx/kics:latest
+        environment:
+        [[ if .Arguments.IGNORE_ON_EXIT ]]
+          - ignore_on_exit= --ignore-on-exit [[ .Arguments.IGNORE_ON_EXIT ]]
+        [[ end ]]
+        [[ if .Arguments.FAIL_ON ]]
+          - fail_on= --fail-on [[ .Arguments.FAIL_ON ]]
+        [[ end ]]
+        [[ if .Arguments.TIME_OUT ]]
+          - time_out= --timeout [[ .Arguments.TIME_OUT ]]
+        [[ end ]]
+        [[ if .Arguments.PROFILING ]]
+          - profiling= --profiling [[ .Arguments.PROFILING ]]
+        [[ end ]]
+        [[ if .Arguments.TYPES ]]
+          - types= -t [[ .Arguments.TYPES ]]
+        [[ end ]]
+        [[ if .Arguments.EXCLUDE_PATHS ]]
+          - exclude_paths= -e [[ .Arguments.EXCLUDE_PATHS ]]
+        [[ end ]]
+        [[ if .Arguments.EXCLUDE_QUERIES ]]
+          - exclude_queries= --exclude-queries [[ .Arguments.EXCLUDE_QUERIES ]]
+        [[ end ]]
+        [[ if .Arguments.EXCLUDE_CATEGORIES ]]
+          - exclude_categories=[[ .Arguments.EXCLUDE_CATEGORIES | strings.TrimSpace ]]
+        [[ end ]]
+        [[ if .Arguments.EXCLUDE_SEVERITIES ]]
+          - exclude_severities= --exclude-severities [[ .Arguments.EXCLUDE_SEVERITIES ]]
+        [[ end ]]
+        [[ if .Arguments.EXCLUDE_RESULTS ]]
+          - exclude_results= -x [[ .Arguments.EXCLUDE_RESULTS ]]
+        [[ end ]]
+        [[ if .Arguments.INCLUDE_QUERIES ]]
+          - include_queries= -i [[ .Arguments.INCLUDE_QUERIES ]]
+        [[ end ]]
+        [[ if .Arguments.OUTPUT_PATH ]]
+          - output_path= -o [[ .Arguments.OUTPUT_PATH ]]
+          - report_formats= --report-formats [[ .Arguments.OUTPUT_FORMATS ]]
+        [[ end ]]
+        [[ if .Arguments.PAYLOAD_PATH ]]
+          - payload_path= -d [[ .Arguments.PAYLOAD_PATH ]]
+        [[ end ]]
+        [[ if .Arguments.QUERIES_PATH ]]
+          - queries_path= -q [[ .Arguments.QUERIES_PATH ]]
+        [[ end ]]
+        [[ if eq .Arguments.VERBOSE true ]]
+          - verbose= -v
+        [[ end ]]
+        [[ if eq .Arguments.BOM true ]]
+          - bom= --bom
+        [[ end ]]
+        [[ if eq .Arguments.DISABLE_FULL_DESCRIPTIONS true ]]
+          - disable_full_descriptions= --disable-full-descriptions
+        [[ end ]]
+        [[ if eq .Arguments.DISABLE_SECRETS true ]]
+          - disable_secrets= --disable-secrets
+        [[ end ]]
+        [[ if .Arguments.SECRETS_REGEXES_PATH ]]
+          - secrets_regexes_path= -r [[ .Arguments.SECRETS_REGEXES_PATH ]]
+        [[ end ]]
+        [[ if .Arguments.LIBRARIES_PATH ]]
+          - libraries_path= -b [[ .Arguments.LIBRARIES_PATH ]]
+        [[ end ]]
+          - project_path= -p [[ .Arguments.PROJECT_PATH ]]
+          - log_level= --log-level [[ .Arguments.LOG_LEVEL ]]
+        commands:
+          - >-
+            kics scan $project_path $output_path $report_formats $payload_path $queries_path $libraries_path 
+            $types 
+            $profiling $ignore_on_exit $fail_on $time_out $verbose $log_level 
+            [[- if .Arguments.EXCLUDE_CATEGORIES ]]
+            --exclude-categories "$exclude_categories" 
+            [[- end ]]
+            $exclude_paths $exclude_queries $exclude_severities $exclude_results 
+            $include_queries 
+            $bom $disable_full_descriptions 
+            $secrets_regexes_path $disable_secrets
+  delimiters:
+    left: '[['
+    right: ']]'
