@@ -84,7 +84,7 @@ steps:
     save_reports_and_payload:
           title: Saving KICS payload and KICS reports
           type: git-commit
-        arguments:
+          arguments:
               repo: 'rafaela-soares/query'
               git: github
               working_directory: '/codefresh/volume/query'
